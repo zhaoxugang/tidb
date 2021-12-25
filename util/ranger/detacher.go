@@ -600,7 +600,16 @@ func ExtractEqAndInCondition(sctx sessionctx.Context, conditions []expression.Ex
 		// or (2) don't do this optimization when StatementContext.UseCache is true. That's because this plan is affected by
 		// flen of user variable, we cannot cache this plan.
 		if lengths[i] != types.UnspecifiedLength {
-			filters = append(filters, cond)
+			if fn, ok := cond.(*expression.ScalarFunction); ok && fn.FuncName.L == "eq" {
+				args := fn.GetArgs()
+				for i, _ := range args {
+					if cont, ok1 := args[i].(*expression.Constant); ok1 {
+						if len(cont.String()) > lengths[i] {
+							filters = append(filters, cond)
+						}
+					}
+				}
+			}
 		}
 	}
 	// We should remove all accessConds, so that they will not be added to filter conditions.
