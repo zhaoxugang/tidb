@@ -1,15 +1,15 @@
 ## 摸鱼不队 RFC
 ### 选题背景
-Tidb使用过程中，发现如下的等值查询与前缀索引结合的组合索引，未能充分利用前缀索引:
-
+TiDB使用过程中，有一个表 objects 使用了前缀索引，在以下的查询中，发现查询特别慢：
+```
 select XXX from objects where bucket_id = '.bucket.meta.bkt20211213' and name >'1' order by bucket_id,name asc limit 5;
 
-
 组合索引为：KEY \`idx\` (\`bucket_id\`,\`name\`(498))，其中name上为长度498的前缀索引
+```
 
-
-
-执行计划如下（只保留与问题描述相关的部分），可以看到的是在进行等值查询获得满足条件的 bucket_id 所有数据之后，算子 IndexRangeScan_19 对这些数据全都进行了扫描即 ".bucket.meta.bucket1" "1",".bucket.meta.bucket1" +inf] ，并没有充分利用前缀索引的特性。
+由于索引长度的限制，这个前缀索引是由普通索引更改过来的，在之前设为普通索引的时候，执行的效率比较高。当更改为前缀索引后，执行耗时急剧增长，所以我们在思考能不能在前缀索引情况下，通过优化，来达到普通索引的效率，类似于更改前的情况。
+ 查看目前 sql 执行计划如下，算子 IndexRangeScan_19 扫描 range:(".bucket.meta.bucket1" "1",".bucket.meta.bucket1" +inf] 所有的 keys，返回 rowId，在 TableRowIDScan_20 中进行回表检索出所有记录，由于 返回的 rowId 个数达到 661666 个，整体耗时较长。
+ 
 ```
 *************************** 1. row ***************************
 id: Projection_8
@@ -56,7 +56,8 @@ estRows: 624973.22
 actRows: 661666
 ......
 ```
-上述语句在 .bucket.meta.bucket1（总共661666条记录）和 .bucket.meta.bkt20211213（总共 27995202条记录）下 name > "1" 的，并且name最小的 5 条记录用时分别为：
+
+在我们的数据中，同一个 bucket_id 下可能有几十万甚至上千万记录，例如当 bucket_id 为  .bucket.meta.bucket1（总共661666条记录）和 .bucket.meta.bkt20211213（总共 27995202条记录）时， 上述 sql 用时分别为：
 
  | .bucket.meta.bucket1（总共661666条记录）|	.bucket.meta.bkt20211213（总共 27995202条记录）| 
  |:---:|:---:|
@@ -66,7 +67,8 @@ actRows: 661666
 
 ### 目标
 
-基于上述问题的背景，本次2021 Hackthon 摸鱼不队的目标为利用前缀索引的优势，对组合索引进行优化，以满足生产环境的需求。
+基于上述问题的背景，以及本条 sql 的执行计划，本次 2021 Hackthon 摸鱼不队在这个 sql 上做下尝试，我们的思路是通过尽可能少地扫描 rowId，来减少 TableRowIDScan 的次数，从而达到提高此 sql 的执行效率的目的。
+我们小队成员都是非专业内核人员，我们以探索、学习的态度进行这次尝试，所以本次 Hackthon 学习是我们的重要目的，如果能达到不错的优化效果，那我们就非常满意了呀。
 
 ### 问题讨论
 
