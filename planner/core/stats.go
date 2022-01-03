@@ -697,6 +697,7 @@ func (ds *DataSource) buildIndexMergeOrPath(partialPaths []*util.AccessPath, cur
 			break
 		}
 	}
+	indexMergePath.TableCondCoveredByPreIndex = ds.isCoveringPrefIndex(indexMergePath.TableFilters, indexMergePath.FullIdxCols, indexMergePath.FullIdxColLens, ds.tableInfo)
 	return indexMergePath
 }
 

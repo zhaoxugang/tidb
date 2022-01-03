@@ -64,6 +64,9 @@ type AccessPath struct {
 	Forced bool
 	// IsSingleScan indicates whether the path is a single index/table scan or table access after index scan.
 	IsSingleScan bool
+
+	// tableConditionConvertByPreIndex indicates if the plan table conditions are covered by PreIndex.
+	TableCondCoveredByPreIndex bool
 }
 
 // IsTablePath returns true if it's IntHandlePath or CommonHandlePath.

@@ -1108,6 +1108,7 @@ func (p *LogicalJoin) constructInnerIndexScanTask(
 		CountAfterIndex:  rowCount,
 		CountAfterAccess: rowCount,
 	}
+	tmpPath.TableCondCoveredByPreIndex = ds.isCoveringPrefIndex(tblConds, path.FullIdxCols, path.FullIdxColLens, ds.tableInfo)
 	// Assume equal conditions used by index join and other conditions are independent.
 	if len(tblConds) > 0 {
 		selectivity, _, err := ds.tableStats.HistColl.Selectivity(ds.ctx, tblConds, ds.possibleAccessPaths)

@@ -89,6 +89,9 @@ type copTask struct {
 
 	// For table partition.
 	partitionInfo PartitionInfo
+
+	// tableConditionConvertByPreIndex indicates if the plan table conditions are covered by PreIndex.
+	tableCondCoveredByPreIndex bool
 }
 
 func (t *copTask) invalid() bool {
@@ -129,7 +132,7 @@ func (t *copTask) plan() PhysicalPlan {
 func attachPlan2Task(p PhysicalPlan, t task) task {
 	switch v := t.(type) {
 	case *copTask:
-		if v.indexPlanFinished {
+		if v.indexPlanFinished && !v.tableCondCoveredByPreIndex {
 			p.SetChildren(v.tablePlan)
 			v.tablePlan = p
 		} else {
@@ -1129,7 +1132,7 @@ func (p *PhysicalLimit) attach2Task(tasks ...task) task {
 	if cop, ok := t.(*copTask); ok {
 		// For double read which requires order being kept, the limit cannot be pushed down to the table side,
 		// because handles would be reordered before being sent to table scan.
-		if (!cop.keepOrder || !cop.indexPlanFinished || cop.indexPlan == nil) && len(cop.rootTaskConds) == 0 {
+		if (!cop.keepOrder || !cop.indexPlanFinished || cop.indexPlan == nil) && len(cop.rootTaskConds) == 0 || cop.tableCondCoveredByPreIndex {
 			// When limit is pushed down, we should remove its offset.
 			newCount := p.Offset + p.Count
 			childProfile := cop.plan().statsInfo()
